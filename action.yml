@@ -1,0 +1,46 @@
+name: PR to Discord
+author: psvm203
+description: Sends pull request notifications to Discord
+inputs:
+    discord_webhook_url:
+        description: Webhook url of a Discord channel
+        required: true
+runs:
+    using: composite
+    steps:
+        - run: |
+              quote=$(shuf -n 1 "${{ github.action_path }}/quotes.txt")
+
+              problem=$(
+                  echo $body |
+                  { grep -Pio "\(?https?://\S+\)?" || echo $pr_url; } |
+                  head -1 |
+                  sed "s/^(\(.*\))$/\1/"
+              )
+
+              description="$quote"$'\n\n'"$problem"
+              color=$((RANDOM * RANDOM % 0x1000000))
+              export description
+              export color
+
+              data=$(
+                  jq -n '{
+                      username: $ENV.username,
+                      avatar_url: $ENV.avatar_url,
+                      embeds: [{
+                          title: $ENV.title,
+                          description: $ENV.description,
+                          url: $ENV.pr_url,
+                          color: $ENV.color
+                      }]
+                  }'
+              )
+
+              curl -H "Content-Type: application/json" -d "$data" ${{ inputs.discord_webhook_url }}
+          shell: bash
+          env:
+              body: ${{ github.event.pull_request.body }}
+              username: ${{ github.event.pull_request.user.login }}
+              avatar_url: ${{ github.event.pull_request.user.avatar_url }}
+              title: ${{ github.event.pull_request.title }}
+              pr_url: ${{ github.event.pull_request.html_url }}
